@@ -1,3 +1,4 @@
+#import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -129,47 +130,51 @@ public static class Signature{
         this.r = r;
     }
 
-    public static Signature messageSign(String message, BigInteger[][] publicKeyList, int index, BigInteger privateKey, BigInteger n, BigInteger a) throws NoSuchAlgorithmException {
-        BigInteger pImage = privateKey.multiply(new BigInteger(SHAsum((publicKeyList[index][0].and(publicKeyList[index][1])).toByteArray())));
-        BigInteger[] c = new BigInteger[publicKeyList.length-1];
-        BigInteger[] r = new BigInteger[publicKeyList.length-1];
-        for(int i = 0; i < publicKeyList.length-1; i++)
+    public static Signature messageSign(String message, BigInteger[][] publicKeyList, int index, BigInteger privateKey, BigInteger n, BigInteger a) throws NoSuchAlgorithmException, NumberFormatException  {
+        BigInteger pImage = privateKey.multiply(new BigInteger(SHAsum((new BigInteger(publicKeyList[index][0].toString(16) + (publicKeyList[index][1].toString(16)), 16).toByteArray())), 16));
+        BigInteger[] c = new BigInteger[publicKeyList.length];
+        BigInteger[] r = new BigInteger[publicKeyList.length];
+        for(int i = 0; i < publicKeyList.length; i++)
         {
             if(i!=index)
             {
-                c[i] = BigIntUtils.randomNumberLessThan(Constants.n);
+                c[i] = BigIntUtils.randomNumberLessThan(Constants.n); 
                 r[i] = BigIntUtils.randomNumberLessThan(Constants.n);
             }
         }
         BigInteger k = BigIntUtils.randomNumberLessThan(Constants.n);
-        BigInteger[][] X = new BigInteger[publicKeyList.length-1][2];
-        BigInteger[] Y = new BigInteger[publicKeyList.length-1];
-        for(int i = 0; i < publicKeyList.length-1; i++)
+        BigInteger[][] X = new BigInteger[publicKeyList.length][2];
+        BigInteger[] Y = new BigInteger[publicKeyList.length];
+        for(int i = 0; i < publicKeyList.length; i++)
         {
             if(i!=index)
             {
-                X[i] = EcOperations.pointMultiply(publicKeyList[index], Constants.n, Constants.a, c[i]);
+                X[i] = EcOperations.pointMultiply(publicKeyList[i], Constants.n, Constants.a, c[i]);
                 X[i] = EcOperations.pointAddition(X[i], EcOperations.pointMultiply(Constants.xyG, Constants.n, Constants.a, r[i]), Constants.n);
+                System.out.println(X[i][0] + "  "+ X[i][1]);
                 Y[i] = pImage.multiply(c[i]);
-                Y[i] = Y[i].add(r[i].multiply(new BigInteger(SHAsum(publicKeyList[index][0].and(publicKeyList[index][1]).toByteArray()))));
+                Y[i] = Y[i].add(r[i].multiply(new BigInteger(SHAsum(new BigInteger(publicKeyList[i][0].toString(16) + (publicKeyList[i][1].toString(16)), 16).toByteArray()), 16)));
             }
         }
         X[index] = EcOperations.pointMultiply(Constants.xyG, Constants.n, Constants.a, k);
-        Y[index] = k.multiply(new BigInteger(SHAsum(publicKeyList[index][0].and(publicKeyList[index][1]).toByteArray())));
-        c[index] = new BigInteger(SHAsum(new BigInteger(message).toByteArray()));
-        for(int i = 0; i < publicKeyList.length-1; i++)
+        System.out.println(X[index][0] + "  "+ X[index][1]);
+        Y[index] = k.multiply(new BigInteger(SHAsum(new BigInteger(publicKeyList[index][0].toString(16) + (publicKeyList[index][1].toString(16)), 16).toByteArray()), 16));
+        c[index] = new BigInteger(SHAsum(new BigInteger(message, 16).toByteArray()), 16);
+        for(int i = 0; i < publicKeyList.length; i++)
         {
-            c[index] = c[index].and(X[i][0].and(X[i][1]));
-            c[index] = c[index].and(Y[i]);
+            c[index] = new BigInteger(c[index].toString(16)+(X[i][0].toString(16) + (X[i][1].toString(16))), 16);
+            c[index] = new BigInteger(c[index].toString(16)+(Y[i]).toString(16), 16);
         }
-        BigInteger Sum = new BigInteger("0");
-        for(int i = 0; i < publicKeyList.length-1; i++)
+        BigInteger Sum = new BigInteger("0", 16);
+        for(int i = 0; i < publicKeyList.length; i++)
         {
             if(i!=index)
-            Sum = Sum.add(c[i]);
+            Sum = new BigInteger(Sum.toString(16) + (c[i]).toString(16), 16);
         }
         c[index] = c[index].subtract(Sum);
+        c[index] = c[index].mod(Constants.n);
         r[index] = k.subtract(privateKey.multiply(c[index]));
+        r[index] = r[index].mod(Constants.n);
         Signature signature = new Signature(pImage, c, r);
         return signature;
     }
@@ -177,27 +182,32 @@ public static class Signature{
     public static boolean signatureVer(String message, BigInteger[][] publicKeyList, Signature signature)
                 throws NoSuchAlgorithmException
     {
-        BigInteger[][] X = new BigInteger[publicKeyList.length-1][2];
-        BigInteger[] Y = new BigInteger[publicKeyList.length-1];
-        for(int i =0; i < publicKeyList.length; i++)
+        System.out.println();
+        BigInteger[][] X = new BigInteger[publicKeyList.length][2];
+        BigInteger[] Y = new BigInteger[publicKeyList.length];
+        for(int i = 0; i < publicKeyList.length; i++)
         {
-            X[i] = EcOperations.pointMultiply(publicKeyList[i], Constants.n, Constants.a, Signature.c[i]);
-            X[i] = EcOperations.pointAddition(X[i], EcOperations.pointMultiply(Constants.xyG, Constants.n, Constants.a, Signature.r[i]), Constants.n);
-            Y[i] = Signature.pimage.multiply(Signature.c[i]);
-            Y[i] = Y[i].add(Signature.r[i].multiply(new BigInteger(SHAsum(publicKeyList[i][0].and(publicKeyList[i][1]).toByteArray()))));
+            X[i] = EcOperations.pointMultiply(publicKeyList[i], Constants.n, Constants.a, signature.c[i]);
+            X[i] = EcOperations.pointAddition(X[i], EcOperations.pointMultiply(Constants.xyG, Constants.n, Constants.a, signature.r[i]), Constants.n);
+            System.out.println(X[i][0] + "  "+ X[i][1]);
+            Y[i] = signature.pimage.multiply(signature.c[i]);
+            Y[i] = Y[i].add(signature.r[i].multiply(new BigInteger(SHAsum(new BigInteger(publicKeyList[i][0].toString(16) + (publicKeyList[i][1]).toString(16), 16).toByteArray()), 16)));
         }
-        BigInteger Sum = new BigInteger("0");
+        BigInteger Sum = new BigInteger("0", 16);
         for(int i = 0; i < publicKeyList.length; i++)
         {
             Sum = Sum.add(c[i]);
         }
-        BigInteger result = new BigInteger(SHAsum(new BigInteger(message).toByteArray()));
-        for(int i = 0; i < publicKeyList.length-1; i++)
+        Sum = Sum.mod(Constants.n);
+        BigInteger result = new BigInteger(SHAsum(new BigInteger(message, 16).toByteArray()), 16);
+        for(int i = 0; i < publicKeyList.length; i++)
         {
-            result = result.and(X[i][0].and(X[i][1]));
-            result = result.and(Y[i]);
+            result = new BigInteger(result.toString(16)+(X[i][0].toString(16)+(X[i][1]).toString(16)), 16);
+            result = new BigInteger(result.toString(16)+(Y[i]).toString(16), 16);
         }
-        if(Sum.equals(result))
+        result = new BigInteger(SHAsum(result.toByteArray()), 16);
+        result = result.mod(Constants.n);
+        if(Sum.mod(Constants.n).equals(result.mod(Constants.n)))
             return true;
         else
             return false;
@@ -209,7 +219,7 @@ public static class Signature{
     }
 
 
-    private static String byteArray2Hex(final byte[] hash) {
+    private static String byteArray2Hex(byte[] hash) {
         Formatter formatter = new Formatter();
         try{
             for (byte b : hash) {
@@ -220,17 +230,17 @@ public static class Signature{
             formatter.close();
         }
 
-
     }
 }
 
-    public static void main(String[] args) throws NoSuchAlgorithmException {
-        String msg = "Hackaton";
+    public static void main(String[] args) throws NoSuchAlgorithmException, NumberFormatException {
+        BigInteger big = new BigInteger("12473953");
+        String msg = String.format("%02x", big);
         KeyPair[] kps = new KeyPair[10];
         for(int i = 0; i < 10; i++) 
             kps[i] = new KeyPair(Constants.xyG, Constants.n, Constants.a);
         BigInteger[][] publicKeyList = new BigInteger[10][2];
-        for(int i = 0; i < 10; i++)
+        for(int i = 0; i < 10; i++)                                                       
         {
             publicKeyList[i][0] = kps[i].publicKey[0];
             publicKeyList[i][1] = kps[i].publicKey[1];
@@ -240,7 +250,7 @@ public static class Signature{
         {
             privateKeyList[i] = kps[i].privateKey;
         }
-        Signature signature = Signature.messageSign(msg, publicKeyList, 1, privateKeyList[1], Constants.n, Constants.a);
+        Signature signature = Signature.messageSign(msg, publicKeyList, 9, privateKeyList[1], Constants.n, Constants.a);
 
         boolean verified = Signature.signatureVer(msg, publicKeyList, signature);
         System.out.println("Signature Verification Status :: "+verified);
