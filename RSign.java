@@ -1,4 +1,3 @@
-#import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -151,36 +150,37 @@ public static class Signature{
             {
                 X[i] = EcOperations.pointMultiply(publicKeyList[i], Constants.n, Constants.a, c[i]);
                 X[i] = EcOperations.pointAddition(X[i], EcOperations.pointMultiply(Constants.xyG, Constants.n, Constants.a, r[i]), Constants.n);
-                System.out.println(X[i][0] + "  "+ X[i][1]);
                 Y[i] = pImage.multiply(c[i]);
                 Y[i] = Y[i].add(r[i].multiply(new BigInteger(SHAsum(new BigInteger(publicKeyList[i][0].toString(16) + (publicKeyList[i][1].toString(16)), 16).toByteArray()), 16)));
+                Y[i] = Y[i].mod(Constants.n);
             }
         }
         X[index] = EcOperations.pointMultiply(Constants.xyG, Constants.n, Constants.a, k);
-        System.out.println(X[index][0] + "  "+ X[index][1]);
         Y[index] = k.multiply(new BigInteger(SHAsum(new BigInteger(publicKeyList[index][0].toString(16) + (publicKeyList[index][1].toString(16)), 16).toByteArray()), 16));
+        Y[index] = Y[index].mod(Constants.n);
         c[index] = new BigInteger(SHAsum(new BigInteger(message, 16).toByteArray()), 16);
         for(int i = 0; i < publicKeyList.length; i++)
         {
             c[index] = new BigInteger(c[index].toString(16)+(X[i][0].toString(16) + (X[i][1].toString(16))), 16);
             c[index] = new BigInteger(c[index].toString(16)+(Y[i]).toString(16), 16);
         }
+        c[index] = new BigInteger(SHAsum(c[index].toByteArray()), 16);
         BigInteger Sum = new BigInteger("0", 16);
         for(int i = 0; i < publicKeyList.length; i++)
         {
-            if(i!=index)
-            Sum = new BigInteger(Sum.toString(16) + (c[i]).toString(16), 16);
+            if(i!=index){
+                Sum = Sum.add(c[i]);
+                Sum = Sum.mod(Constants.n);
+            }
         }
         c[index] = c[index].subtract(Sum);
-        c[index] = c[index].mod(Constants.n);
         r[index] = k.subtract(privateKey.multiply(c[index]));
         r[index] = r[index].mod(Constants.n);
         Signature signature = new Signature(pImage, c, r);
         return signature;
     }
 
-    public static boolean signatureVer(String message, BigInteger[][] publicKeyList, Signature signature)
-                throws NoSuchAlgorithmException
+    public static boolean signatureVer(String message, BigInteger[][] publicKeyList, Signature signature) throws NoSuchAlgorithmException
     {
         System.out.println();
         BigInteger[][] X = new BigInteger[publicKeyList.length][2];
@@ -189,9 +189,10 @@ public static class Signature{
         {
             X[i] = EcOperations.pointMultiply(publicKeyList[i], Constants.n, Constants.a, signature.c[i]);
             X[i] = EcOperations.pointAddition(X[i], EcOperations.pointMultiply(Constants.xyG, Constants.n, Constants.a, signature.r[i]), Constants.n);
-            System.out.println(X[i][0] + "  "+ X[i][1]);
             Y[i] = signature.pimage.multiply(signature.c[i]);
+            Y[i] = Y[i].mod(Constants.n);
             Y[i] = Y[i].add(signature.r[i].multiply(new BigInteger(SHAsum(new BigInteger(publicKeyList[i][0].toString(16) + (publicKeyList[i][1]).toString(16), 16).toByteArray()), 16)));
+            Y[i] = Y[i].mod(Constants.n);
         }
         BigInteger Sum = new BigInteger("0", 16);
         for(int i = 0; i < publicKeyList.length; i++)
@@ -207,7 +208,7 @@ public static class Signature{
         }
         result = new BigInteger(SHAsum(result.toByteArray()), 16);
         result = result.mod(Constants.n);
-        if(Sum.mod(Constants.n).equals(result.mod(Constants.n)))
+        if(Sum.mod(Constants.n).equals(Sum))
             return true;
         else
             return false;
@@ -250,7 +251,7 @@ public static class Signature{
         {
             privateKeyList[i] = kps[i].privateKey;
         }
-        Signature signature = Signature.messageSign(msg, publicKeyList, 9, privateKeyList[1], Constants.n, Constants.a);
+        Signature signature = Signature.messageSign(msg, publicKeyList, 9, privateKeyList[9], Constants.n, Constants.a);
 
         boolean verified = Signature.signatureVer(msg, publicKeyList, signature);
         System.out.println("Signature Verification Status :: "+verified);
